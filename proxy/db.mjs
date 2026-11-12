@@ -1,6 +1,18 @@
 import { DatabaseSync } from "node:sqlite";
 import { createHash, randomBytes } from "node:crypto";
 
+// Columns added after the first release; added in place so existing data is kept.
+const LATER_COLUMNS = {
+  projects: {
+    rpm_cap: "INTEGER",
+    monthly_token_cap: "INTEGER",
+    max_tokens_cap: "INTEGER",
+    quota_cap_pct: "INTEGER",
+    expires_at: "TEXT",
+  },
+  requests: { ttfb_ms: "INTEGER", max_tokens: "INTEGER", user_agent: "TEXT" },
+};
+
 export function openDb(file) {
   const db = new DatabaseSync(file);
   db.exec(`
@@ -40,7 +52,27 @@ export function openDb(file) {
     );
     CREATE INDEX IF NOT EXISTS requests_ts ON requests(ts);
     CREATE INDEX IF NOT EXISTS requests_project_ts ON requests(project_id, ts);
+    CREATE TABLE IF NOT EXISTS models (
+      id TEXT PRIMARY KEY,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      max_tokens_cap INTEGER,
+      price_in REAL,
+      price_out REAL,
+      aliases TEXT,
+      note TEXT
+    );
   `);
+  for (const [table, cols] of Object.entries(LATER_COLUMNS)) {
+    const have = new Set(
+      db
+        .prepare(`PRAGMA table_info(${table})`)
+        .all()
+        .map((c) => c.name),
+    );
+    for (const [col, type] of Object.entries(cols))
+      if (!have.has(col))
+        db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`);
+  }
   return db;
 }
 
