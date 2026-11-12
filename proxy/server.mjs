@@ -1,6 +1,7 @@
 // Claude gateway key proxy: per-project API keys and usage tracking in front of Meridian.
 // Plain Node 22, no npm dependencies.
 import http from "node:http";
+import https from "node:https";
 import { readFileSync, writeFileSync, existsSync, chmodSync } from "node:fs";
 import {
   randomBytes,
@@ -87,6 +88,14 @@ function checkPassword(pw, stored) {
 }
 
 const cfg = loadConfig();
+const CERT = join(ROOT, "certs/gateway.pem");
+const CERT_KEY = join(ROOT, "certs/gateway-key.pem");
+const TLS =
+  existsSync(CERT) && existsSync(CERT_KEY)
+    ? { cert: readFileSync(CERT), key: readFileSync(CERT_KEY) }
+    : null;
+const SCHEME = TLS ? "https" : "http";
+cfg.httpPort ??= 4180;
 const db = openDb(join(ROOT, "gateway.db"));
 
 // ---------- CLI ----------
@@ -623,8 +632,12 @@ async function admin(req, res, path, url) {
       memory: await memory(),
       upstream: await upstreamHealth(),
       connection: {
-        lanUrl: `http://${cfg.publicHost}:${cfg.port}`,
-        localUrl: `http://localhost:${cfg.port}`,
+        lanUrl: `${SCHEME}://${cfg.publicHost}:${cfg.port}`,
+        localUrl: `${SCHEME}://localhost:${cfg.port}`,
+        httpUrl:
+          TLS && cfg.httpPort
+            ? `http://${cfg.publicHost}:${cfg.httpPort}`
+            : null,
         defaultModel: cfg.defaultModel,
         models: ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5"],
       },
@@ -793,7 +806,7 @@ async function admin(req, res, path, url) {
 
 // ---------- server ----------
 const PAGE = join(ROOT, "proxy/public/index.html");
-const server = http.createServer(async (req, res) => {
+const handler = async (req, res) => {
   try {
     const url = new URL(req.url, "http://x");
     const path = url.pathname;
@@ -832,13 +845,24 @@ const server = http.createServer(async (req, res) => {
     if (!res.headersSent) apiError(res, 500, "api_error", "Gateway error.");
     else res.end();
   }
-});
-server.requestTimeout = 0;
-server.listen(cfg.port, cfg.host, () =>
-  console.log(
-    `Gateway on http://${cfg.host}:${cfg.port} (LAN: http://${cfg.publicHost}:${cfg.port}) -> ${cfg.upstream}`,
-  ),
-);
+};
+
+// https on cfg.port when certs/gateway.pem + certs/gateway-key.pem exist (made with mkcert),
+// plus plain http on cfg.httpPort for clients that do not trust the local CA.
+function start(server, port, scheme) {
+  server.requestTimeout = 0;
+  server.listen(port, cfg.host, () =>
+    console.log(
+      `Gateway on ${scheme}://${cfg.host}:${port} (LAN: ${scheme}://${cfg.publicHost}:${port}) -> ${cfg.upstream}`,
+    ),
+  );
+}
+if (TLS) {
+  start(https.createServer(TLS, handler), cfg.port, "https");
+  if (cfg.httpPort) start(http.createServer(handler), cfg.httpPort, "http");
+} else {
+  start(http.createServer(handler), cfg.port, "http");
+}
 
 // Prune old rows daily.
 const prune = () =>
