@@ -54,3 +54,16 @@ tail -f logs/proxy.log logs/meridian.log
 - **Secrets:** `config.json`, `.internal-key`, `ADMIN_PASSWORD.txt`, `CRM_KEY.txt` and `gateway.db` are git-ignored.
 - **Personal use only:** the gateway runs on your personal Claude subscription. Keep it for your own testing, and check Anthropic's terms before sharing it with others.
 - **Cost figures** in the dashboard estimate what the same tokens would cost on the paid API (prices are in `config.json`). They are not a bill.
+
+## Future: public URL (Cloudflare named tunnel)
+Planned, not built yet. These steps will make the gateway reachable at a fixed public https address such as `https://claude.<your-domain>`, with a certificate that every app trusts.
+1. Needs a domain on Cloudflare (the free plan is fine). Then `brew install cloudflared`, `cloudflared tunnel login`, `cloudflared tunnel create claude-gateway`, and `cloudflared tunnel route dns claude-gateway claude.<domain>`.
+2. Tunnel config: the ingress sends `claude.<domain>` to `http://localhost:4180` (no local certificate needed), and every other hostname returns 404.
+3. A third LaunchAgent, `com.local.claude-gateway.tunnel`, runs `cloudflared tunnel run` and is installed by `install.sh`.
+4. Hardening before going public:
+   - `/` and `/admin/*` are blocked for requests arriving through the tunnel (detected by the `cf-connecting-ip` header) unless `publicDashboard: true`. Optionally put Cloudflare Access (email login) in front of the dashboard.
+   - Wrong-key attempts are rate-limited per IP, and the client IP is logged from `cf-connecting-ip`.
+   - The dashboard shows the public URL in its connection details.
+5. After that, the CRM uses `https://claude.<domain>`. `WEBHOOKS_ALLOW_PRIVATE` and `NODE_EXTRA_CA_CERTS` are no longer needed.
+
+Note: public access still runs on your personal Claude subscription. Keep it to your own projects.
