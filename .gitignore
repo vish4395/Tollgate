@@ -10,3 +10,5 @@ data/
 work/
 logs/
 certs/
+claude-home/
+.oauth-token
