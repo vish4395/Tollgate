@@ -1,0 +1,11 @@
+meridian/node_modules/
+config.json
+.internal-key
+.node-path
+ADMIN_PASSWORD.txt
+CRM_KEY.txt
+*.db
+*.db-*
+data/
+work/
+logs/

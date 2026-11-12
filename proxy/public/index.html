@@ -1,0 +1,1045 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Claude Gateway</title>
+    <style>
+      :root {
+        --bg: #f6f7f9;
+        --card: #fff;
+        --ink: #1c2230;
+        --muted: #5d6676;
+        --line: #e2e5ea;
+        --accent: #c2410c;
+        --ok: #15803d;
+        --bad: #b91c1c;
+        --warn: #a16207;
+        --code: #f1f3f6;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #111418;
+          --card: #1a1e24;
+          --ink: #e7eaee;
+          --muted: #9aa3b0;
+          --line: #2b313a;
+          --accent: #fb923c;
+          --ok: #4ade80;
+          --bad: #f87171;
+          --warn: #facc15;
+          --code: #232831;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          14px/1.45 system-ui,
+          -apple-system,
+          Segoe UI,
+          sans-serif;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 20px;
+        border-bottom: 1px solid var(--line);
+        background: var(--card);
+        position: sticky;
+        top: 0;
+        z-index: 2;
+      }
+      header h1 {
+        font-size: 16px;
+        margin: 0;
+      }
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--muted);
+        display: inline-block;
+      }
+      .dot.ok {
+        background: var(--ok);
+      }
+      .dot.bad {
+        background: var(--bad);
+      }
+      nav {
+        display: flex;
+        gap: 4px;
+        margin-inline-start: auto;
+        flex-wrap: wrap;
+      }
+      nav button,
+      .btn {
+        border: 1px solid var(--line);
+        background: var(--card);
+        color: var(--ink);
+        padding: 6px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        font: inherit;
+      }
+      nav button.on {
+        background: var(--ink);
+        color: var(--card);
+      }
+      .btn.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      .btn.danger {
+        color: var(--bad);
+      }
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      main {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px 16px 60px;
+      }
+      .grid {
+        display: grid;
+        gap: 14px;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 14px 16px;
+      }
+      .card h2 {
+        font-size: 14px;
+        margin: 0 0 10px;
+      }
+      .stat .v {
+        font-size: 22px;
+        font-weight: 600;
+      }
+      .stat .l {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      th,
+      td {
+        text-align: start;
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+      th {
+        color: var(--muted);
+        font-weight: 500;
+        white-space: nowrap;
+      }
+      td.num,
+      th.num {
+        text-align: end;
+        font-variant-numeric: tabular-nums;
+      }
+      .scroll {
+        overflow-x: auto;
+      }
+      code,
+      pre {
+        background: var(--code);
+        border-radius: 5px;
+        font:
+          12px ui-monospace,
+          Menlo,
+          monospace;
+      }
+      code {
+        padding: 1px 5px;
+      }
+      pre {
+        padding: 10px;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-break: break-all;
+        margin: 6px 0;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .ok {
+        color: var(--ok);
+      }
+      .bad {
+        color: var(--bad);
+      }
+      .warn {
+        color: var(--warn);
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      input,
+      select {
+        font: inherit;
+        padding: 6px 8px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--bg);
+        color: var(--ink);
+      }
+      .kv {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 6px 14px;
+      }
+      .section {
+        margin-top: 16px;
+      }
+      .bars {
+        display: flex;
+        align-items: flex-end;
+        gap: 4px;
+        height: 90px;
+      }
+      .bars div {
+        flex: 1;
+        background: var(--accent);
+        border-radius: 3px 3px 0 0;
+        min-height: 2px;
+        position: relative;
+      }
+      .bars div span {
+        position: absolute;
+        bottom: -18px;
+        left: 0;
+        right: 0;
+        text-align: center;
+        font-size: 10px;
+        color: var(--muted);
+      }
+      .err {
+        color: var(--bad);
+        max-width: 420px;
+        word-break: break-word;
+      }
+      #login {
+        max-width: 340px;
+        margin: 80px auto;
+      }
+      .hidden {
+        display: none !important;
+      }
+      .newkey {
+        border: 1px solid var(--accent);
+      }
+      @media (max-width: 640px) {
+        header {
+          flex-wrap: wrap;
+        }
+        nav {
+          margin-inline-start: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="login" class="card hidden">
+      <h2>Claude Gateway admin</h2>
+      <form id="loginForm" class="row">
+        <input
+          id="pw"
+          type="password"
+          placeholder="Admin password"
+          autocomplete="current-password"
+          style="flex: 1"
+          aria-label="Admin password"
+        />
+        <button class="btn primary">Sign in</button>
+      </form>
+      <p id="loginErr" class="bad"></p>
+      <p class="muted">
+        Password is in <code>ADMIN_PASSWORD.txt</code> in the gateway folder.
+      </p>
+    </div>
+
+    <div id="app" class="hidden">
+      <header>
+        <span id="dot" class="dot"></span>
+        <h1>Claude Gateway</h1>
+        <span id="hdr" class="muted"></span>
+        <nav>
+          <button data-tab="overview" class="on">Overview</button>
+          <button data-tab="projects">Projects</button>
+          <button data-tab="usage">Usage</button>
+          <button data-tab="requests">Requests</button>
+          <button data-tab="errors">Errors</button>
+          <button id="logout">Sign out</button>
+        </nav>
+      </header>
+      <main>
+        <section data-panel="overview">
+          <div class="grid" id="stats"></div>
+          <div class="grid section">
+            <div class="card">
+              <h2>Backend</h2>
+              <div class="kv" id="backend"></div>
+              <div class="row section">
+                <button class="btn" id="testBtn">Send test request</button
+                ><span id="testOut" class="muted"></span>
+              </div>
+            </div>
+            <div class="card">
+              <h2>Connection</h2>
+              <div class="kv" id="conn"></div>
+            </div>
+          </div>
+          <div class="card section">
+            <h2>Last 7 days</h2>
+            <div class="bars" id="bars"></div>
+            <div style="height: 18px"></div>
+          </div>
+        </section>
+
+        <section data-panel="projects" class="hidden">
+          <div class="card">
+            <h2>New project</h2>
+            <form id="newProj" class="row">
+              <input
+                id="pname"
+                placeholder="Project name (e.g. CRM)"
+                required
+                aria-label="Project name"
+              /><input
+                id="pnote"
+                placeholder="Note (optional)"
+                aria-label="Note"
+              /><button class="btn primary">Create key</button>
+            </form>
+            <div id="newKeyBox"></div>
+          </div>
+          <div id="projList"></div>
+        </section>
+
+        <section data-panel="usage" class="hidden">
+          <div class="row">
+            <label
+              >Period
+              <select id="days">
+                <option value="1">Today</option>
+                <option value="7" selected>7 days</option>
+                <option value="30">30 days</option>
+              </select></label
+            >
+          </div>
+          <div class="card section">
+            <h2>By project</h2>
+            <div class="scroll" id="uProj"></div>
+          </div>
+          <div class="card section">
+            <h2>By model</h2>
+            <div class="scroll" id="uModel"></div>
+          </div>
+          <div class="card section">
+            <h2>By day</h2>
+            <div class="scroll" id="uDay"></div>
+          </div>
+          <div class="card section">
+            <h2>By client IP</h2>
+            <div class="scroll" id="uIp"></div>
+          </div>
+          <p class="muted">
+            Cost is an estimate of what the same tokens would cost on the paid
+            API (prices in <code>config.json</code>). Your subscription is not
+            billed per token.
+          </p>
+        </section>
+
+        <section data-panel="requests" class="hidden">
+          <div class="card">
+            <div class="row">
+              <h2 style="margin: 0">Recent requests</h2>
+              <select id="reqProj" aria-label="Filter by project">
+                <option value="">All projects</option>
+              </select>
+            </div>
+            <div class="scroll section" id="reqTable"></div>
+          </div>
+        </section>
+
+        <section data-panel="errors" class="hidden">
+          <div class="card">
+            <div class="row">
+              <h2 style="margin: 0">Errors</h2>
+              <button class="btn" id="clearErr">Clear messages</button>
+            </div>
+            <div class="scroll section" id="errTable"></div>
+            <p class="muted">
+              Backend logs: <code>logs/meridian.log</code>,
+              <code>logs/proxy.log</code>. Meridian's own dashboard (this Mac
+              only): <code>http://127.0.0.1:4101/telemetry</code>
+            </p>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const $ = (s) => document.querySelector(s);
+      const el = (tag, props = {}, ...kids) => {
+        const e = document.createElement(tag);
+        for (const [k, v] of Object.entries(props)) {
+          if (k === "class") e.className = v;
+          else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+          else e.setAttribute(k, v);
+        }
+        for (const k of kids.flat())
+          e.append(k instanceof Node ? k : document.createTextNode(k ?? ""));
+        return e;
+      };
+      const fmt = (n) => (n ?? 0).toLocaleString();
+      const money = (n) => "$" + (n ?? 0).toFixed(n >= 1 ? 2 : 4);
+      const ago = (s) => {
+        if (!s) return "never";
+        const d =
+          (Date.now() -
+            new Date(s.includes("T") ? s : s.replace(" ", "T") + "Z")) /
+          1000;
+        return d < 60
+          ? Math.round(d) + "s ago"
+          : d < 3600
+            ? Math.round(d / 60) + "m ago"
+            : d < 86400
+              ? Math.round(d / 3600) + "h ago"
+              : Math.round(d / 86400) + "d ago";
+      };
+      const dur = (s) =>
+        s < 3600
+          ? Math.round(s / 60) + "m"
+          : s < 86400
+            ? (s / 3600).toFixed(1) + "h"
+            : (s / 86400).toFixed(1) + "d";
+
+      async function api(path, opts = {}) {
+        const r = await fetch(path, {
+          ...opts,
+          headers: {
+            "content-type": "application/json",
+            "x-cgw": "1",
+            ...(opts.headers || {}),
+          },
+        });
+        if (r.status === 401 && !path.endsWith("/login")) {
+          showLogin();
+          throw new Error("auth");
+        }
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.error || r.statusText);
+        return j;
+      }
+      function table(cols, rows) {
+        if (!rows.length) return el("p", { class: "muted" }, "Nothing yet.");
+        return el(
+          "table",
+          {},
+          el(
+            "thead",
+            {},
+            el(
+              "tr",
+              {},
+              cols.map((c) => el("th", { class: c.num ? "num" : "" }, c.h)),
+            ),
+          ),
+          el(
+            "tbody",
+            {},
+            rows.map((r) =>
+              el(
+                "tr",
+                {},
+                cols.map((c) => {
+                  const v = c.f ? c.f(r) : r[c.k];
+                  return el(
+                    "td",
+                    { class: (c.num ? "num " : "") + (c.cls ? c.cls(r) : "") },
+                    v,
+                  );
+                }),
+              ),
+            ),
+          ),
+        );
+      }
+      function copyBtn(text) {
+        return el(
+          "button",
+          {
+            class: "btn",
+            type: "button",
+            onclick: (e) => {
+              navigator.clipboard?.writeText(text);
+              e.target.textContent = "Copied";
+              setTimeout(() => (e.target.textContent = "Copy"), 1200);
+            },
+          },
+          "Copy",
+        );
+      }
+
+      let tab = "overview",
+        status = null,
+        projects = [];
+      document.querySelectorAll("nav [data-tab]").forEach((b) =>
+        b.addEventListener("click", () => {
+          tab = b.dataset.tab;
+          document
+            .querySelectorAll("nav [data-tab]")
+            .forEach((x) => x.classList.toggle("on", x === b));
+          document
+            .querySelectorAll("[data-panel]")
+            .forEach((p) =>
+              p.classList.toggle("hidden", p.dataset.panel !== tab),
+            );
+          refresh();
+        }),
+      );
+
+      function showLogin() {
+        $("#app").classList.add("hidden");
+        $("#login").classList.remove("hidden");
+        $("#pw").focus();
+      }
+      $("#loginForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        try {
+          await api("/admin/login", {
+            method: "POST",
+            body: JSON.stringify({ password: $("#pw").value }),
+          });
+          $("#pw").value = "";
+          $("#login").classList.add("hidden");
+          $("#app").classList.remove("hidden");
+          refresh();
+        } catch (err) {
+          $("#loginErr").textContent = err.message;
+        }
+      });
+      $("#logout").addEventListener("click", async () => {
+        await api("/admin/logout", { method: "POST" }).catch(() => {});
+        showLogin();
+      });
+
+      async function loadStatus() {
+        status = await api("/admin/api/status");
+        const u = status.upstream,
+          m = status.memory;
+        $("#dot").className = "dot " + (u.ok ? "ok" : "bad");
+        $("#hdr").textContent = u.ok
+          ? "Healthy"
+          : "Backend " + (u.status || "down");
+        $("#backend").replaceChildren(
+          el("span", { class: "muted" }, "Status"),
+          el(
+            "span",
+            { class: u.ok ? "ok" : "bad" },
+            u.status + (u.upstreamState ? ` (${u.upstreamState})` : ""),
+          ),
+          el("span", { class: "muted" }, "Meridian"),
+          el("span", {}, (u.version || "?") + " · " + (u.mode || "")),
+          el("span", { class: "muted" }, "Claude login"),
+          el(
+            "span",
+            { class: u.loggedIn ? "ok" : "bad" },
+            u.loggedIn
+              ? `Signed in (${u.plan ?? "plan ?"})`
+              : 'Not signed in — run "claude" and log in',
+          ),
+          el("span", { class: "muted" }, "Login renews in"),
+          el(
+            "span",
+            {
+              class:
+                u.daysUntilRenewal != null && u.daysUntilRenewal < 7
+                  ? "warn"
+                  : "",
+            },
+            u.daysUntilRenewal != null ? u.daysUntilRenewal + " days" : "—",
+          ),
+          el("span", { class: "muted" }, "Last backend error"),
+          el("span", {}, u.lastError || u.error || "none"),
+          el("span", { class: "muted" }, "Gateway uptime"),
+          el("span", {}, dur(status.uptimeSec)),
+        );
+        const c = status.connection;
+        $("#conn").replaceChildren(
+          el("span", { class: "muted" }, "LAN URL"),
+          el(
+            "span",
+            { class: "row" },
+            el("code", {}, c.lanUrl),
+            copyBtn(c.lanUrl),
+          ),
+          el("span", { class: "muted" }, "This Mac"),
+          el(
+            "span",
+            { class: "row" },
+            el("code", {}, c.localUrl),
+            copyBtn(c.localUrl),
+          ),
+          el("span", { class: "muted" }, "Formats"),
+          el(
+            "span",
+            {},
+            el("code", {}, "POST /v1/messages"),
+            " ",
+            el("code", {}, "POST /v1/chat/completions"),
+            " ",
+            el("code", {}, "GET /v1/models"),
+          ),
+          el("span", { class: "muted" }, "Auth"),
+          el(
+            "span",
+            {},
+            el("code", {}, "x-api-key: <project key>"),
+            " or ",
+            el("code", {}, "Authorization: Bearer <key>"),
+          ),
+          el("span", { class: "muted" }, "Models"),
+          el("span", {}, c.models.join(", ")),
+          el("span", { class: "muted" }, "Default"),
+          el("span", {}, c.defaultModel),
+        );
+        $("#stats").replaceChildren(
+          ...[
+            [
+              "Active / queued",
+              `${status.active} / ${status.queued}`,
+              `max ${status.maxConcurrent} at once`,
+            ],
+            ["Gateway memory", m.proxyMb + " MB", "key proxy"],
+            [
+              "Backend memory",
+              m.meridianMb + " MB",
+              `${m.cliProcesses} CLI process(es)`,
+            ],
+            ["Projects", String(projects.length || "—"), "API keys"],
+          ].map(([l, v, s]) =>
+            el(
+              "div",
+              { class: "card stat" },
+              el("div", { class: "l" }, l),
+              el("div", { class: "v" }, v),
+              el("div", { class: "l" }, s),
+            ),
+          ),
+        );
+      }
+      $("#testBtn").addEventListener("click", async (e) => {
+        e.target.disabled = true;
+        $("#testOut").textContent = "Waiting…";
+        try {
+          const r = await api("/admin/api/test", { method: "POST" });
+          $("#testOut").textContent =
+            `${r.ok ? "OK" : "Failed"} in ${r.ms} ms: ${r.text}`;
+          $("#testOut").className = r.ok ? "ok" : "bad";
+        } finally {
+          e.target.disabled = false;
+        }
+      });
+
+      async function loadProjects() {
+        projects = await api("/admin/api/projects");
+        const sel = $("#reqProj"),
+          cur = sel.value;
+        sel.replaceChildren(
+          el("option", { value: "" }, "All projects"),
+          ...projects.map((p) => el("option", { value: p.id }, p.name)),
+        );
+        sel.value = cur;
+        if (tab !== "projects") return;
+        const base = status?.connection.lanUrl ?? location.origin;
+        $("#projList").replaceChildren(
+          ...projects.map((p) => {
+            const u = p.usage || {};
+            const field = (label, key, ph) =>
+              el(
+                "label",
+                {},
+                label + " ",
+                el("input", {
+                  value: p[key] ?? "",
+                  placeholder: ph,
+                  size: key === "allowedModels" ? 22 : 8,
+                  "data-k": key,
+                  "aria-label": label,
+                }),
+              );
+            const card = el(
+              "div",
+              { class: "card section" },
+              el(
+                "div",
+                { class: "row" },
+                el("h2", { style: "margin:0" }, p.name),
+                el(
+                  "span",
+                  { class: p.enabled ? "ok" : "bad" },
+                  p.enabled ? "Enabled" : "Disabled",
+                ),
+                el(
+                  "span",
+                  { class: "muted" },
+                  `key ${p.keyPrefix}… · last used ${ago(p.lastUsedAt)}`,
+                ),
+                p.note ? el("span", { class: "muted" }, "· " + p.note) : "",
+              ),
+              el(
+                "p",
+                { class: "muted" },
+                `Today ${fmt(u.today)} requests · 30 days: ${fmt(u.n30)} requests, ${fmt(u.tok30)} tokens, ${money(u.cost30)} est., ${fmt(u.err30)} errors`,
+              ),
+              el(
+                "div",
+                { class: "row" },
+                field("Daily requests cap", "dailyRequestCap", "none"),
+                field("Daily tokens cap", "dailyTokenCap", "none"),
+                field(
+                  "Allowed models",
+                  "allowedModels",
+                  "all (e.g. haiku,sonnet)",
+                ),
+                el(
+                  "button",
+                  {
+                    class: "btn",
+                    type: "button",
+                    onclick: async () => {
+                      const b = {};
+                      card
+                        .querySelectorAll("[data-k]")
+                        .forEach((i) => (b[i.dataset.k] = i.value));
+                      await api("/admin/api/projects/" + p.id, {
+                        method: "PATCH",
+                        body: JSON.stringify(b),
+                      });
+                      refresh();
+                    },
+                  },
+                  "Save limits",
+                ),
+              ),
+              el(
+                "details",
+                { class: "section" },
+                el("summary", {}, "Connection details"),
+                el(
+                  "div",
+                  { class: "kv section" },
+                  el("span", { class: "muted" }, "Base URL"),
+                  el("code", {}, base),
+                  el("span", { class: "muted" }, "API key"),
+                  el(
+                    "span",
+                    {},
+                    "The key shown when created or rotated (stored only as a hash).",
+                  ),
+                  el("span", { class: "muted" }, "CRM assistant"),
+                  el(
+                    "span",
+                    {},
+                    "Provider: Anthropic (Claude) · Address: ",
+                    el("code", {}, base),
+                    " · Model: ",
+                    el("code", {}, "claude-haiku-5-5"),
+                  ),
+                ),
+                el(
+                  "pre",
+                  {},
+                  `curl ${base}/v1/messages \\\n  -H "x-api-key: $KEY" -H "content-type: application/json" -H "anthropic-version: 2023-06-01" \\\n  -d '{"model":"claude-haiku-5-5","max_tokens":200,"messages":[{"role":"user","content":"Hello"}]}'`,
+                ),
+                el(
+                  "pre",
+                  {},
+                  `# OpenAI-style clients\nOPENAI_BASE_URL=${base}/v1\nOPENAI_API_KEY=$KEY\n# Anthropic SDKs\nANTHROPIC_BASE_URL=${base}\nANTHROPIC_API_KEY=$KEY`,
+                ),
+              ),
+              el(
+                "div",
+                { class: "row section" },
+                el(
+                  "button",
+                  {
+                    class: "btn",
+                    type: "button",
+                    onclick: async () => {
+                      await api("/admin/api/projects/" + p.id, {
+                        method: "PATCH",
+                        body: JSON.stringify({ enabled: !p.enabled }),
+                      });
+                      refresh();
+                    },
+                  },
+                  p.enabled ? "Disable" : "Enable",
+                ),
+                el(
+                  "button",
+                  {
+                    class: "btn",
+                    type: "button",
+                    onclick: async () => {
+                      if (
+                        !confirm(
+                          `Rotate the key for ${p.name}? The old key stops working now.`,
+                        )
+                      )
+                        return;
+                      const r = await api(
+                        `/admin/api/projects/${p.id}/rotate`,
+                        { method: "POST" },
+                      );
+                      showKey(p.name, r.key);
+                    },
+                  },
+                  "Rotate key",
+                ),
+                el(
+                  "button",
+                  {
+                    class: "btn danger",
+                    type: "button",
+                    onclick: async () => {
+                      if (
+                        !confirm(
+                          `Delete ${p.name}? Its key stops working; usage history stays.`,
+                        )
+                      )
+                        return;
+                      await api("/admin/api/projects/" + p.id, {
+                        method: "DELETE",
+                      });
+                      refresh();
+                    },
+                  },
+                  "Delete",
+                ),
+              ),
+            );
+            return card;
+          }),
+        );
+        if (!projects.length)
+          $("#projList").replaceChildren(
+            el(
+              "p",
+              { class: "muted section" },
+              "No projects yet. Create one above to get an API key.",
+            ),
+          );
+      }
+      function showKey(name, key) {
+        $("#newKeyBox").replaceChildren(
+          el(
+            "div",
+            { class: "card section newkey" },
+            el(
+              "strong",
+              {},
+              `Key for ${name} — copy it now, it is not shown again:`,
+            ),
+            el(
+              "div",
+              { class: "row section" },
+              el("code", {}, key),
+              copyBtn(key),
+            ),
+          ),
+        );
+        window.scrollTo({ top: 0 });
+        refresh();
+      }
+      $("#newProj").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        try {
+          const name = $("#pname").value;
+          const r = await api("/admin/api/projects", {
+            method: "POST",
+            body: JSON.stringify({ name, note: $("#pnote").value }),
+          });
+          $("#pname").value = $("#pnote").value = "";
+          showKey(name, r.key);
+        } catch (err) {
+          alert(err.message);
+        }
+      });
+
+      async function loadOverviewBars() {
+        const u = await api("/admin/api/usage?days=7");
+        const max = Math.max(1, ...u.daily.map((d) => d.n));
+        $("#bars").replaceChildren(
+          ...(u.daily.length
+            ? u.daily.map((d) =>
+                el(
+                  "div",
+                  {
+                    style: `height:${(d.n / max) * 100}%`,
+                    title: `${d.day}: ${d.n} requests, ${fmt(d.tok)} tokens, ${d.err} errors`,
+                  },
+                  el("span", {}, d.day.slice(5)),
+                ),
+              )
+            : [el("p", { class: "muted" }, "No requests yet.")]),
+        );
+      }
+      async function loadUsage() {
+        const u = await api("/admin/api/usage?days=" + $("#days").value);
+        const cols = (first) => [
+          first,
+          { h: "Requests", k: "n", num: 1, f: (r) => fmt(r.n) },
+          { h: "Input", num: 1, f: (r) => fmt(r.in_tok) },
+          { h: "Output", num: 1, f: (r) => fmt(r.out_tok) },
+          { h: "Cache", num: 1, f: (r) => fmt(r.cache) },
+          { h: "Est. cost", num: 1, f: (r) => money(r.cost) },
+          { h: "Avg ms", num: 1, f: (r) => fmt(r.avg_ms) },
+        ];
+        $("#uProj").replaceChildren(
+          table(
+            [
+              ...cols({ h: "Project", k: "project" }),
+              {
+                h: "Errors",
+                num: 1,
+                f: (r) => fmt(r.err),
+                cls: (r) => (r.err ? "bad" : ""),
+              },
+            ],
+            u.byProject,
+          ),
+        );
+        $("#uModel").replaceChildren(
+          table(cols({ h: "Model", k: "model" }), u.byModel),
+        );
+        $("#uDay").replaceChildren(
+          table(
+            [
+              { h: "Day", k: "day" },
+              { h: "Requests", num: 1, f: (r) => fmt(r.n) },
+              { h: "Tokens", num: 1, f: (r) => fmt(r.tok) },
+              { h: "Est. cost", num: 1, f: (r) => money(r.cost) },
+              { h: "Errors", num: 1, f: (r) => fmt(r.err) },
+              { h: "Avg ms", num: 1, f: (r) => fmt(r.avg_ms) },
+            ],
+            u.daily,
+          ),
+        );
+        $("#uIp").replaceChildren(
+          table(
+            [
+              { h: "IP", k: "ip" },
+              { h: "Requests", num: 1, f: (r) => fmt(r.n) },
+            ],
+            u.byIp,
+          ),
+        );
+      }
+      $("#days").addEventListener("change", loadUsage);
+      $("#reqProj").addEventListener("change", () => loadRequests());
+      const reqCols = [
+        { h: "When", f: (r) => ago(r.ts) },
+        { h: "Project", f: (r) => r.project ?? "—" },
+        { h: "IP", k: "ip" },
+        { h: "Path", k: "path" },
+        { h: "Model", f: (r) => r.model ?? "" },
+        {
+          h: "Status",
+          k: "status",
+          cls: (r) => (r.status >= 400 ? "bad" : "ok"),
+        },
+        { h: "ms", num: 1, f: (r) => fmt(r.ms) },
+        { h: "Wait", num: 1, f: (r) => fmt(r.queue_ms) },
+        {
+          h: "In",
+          num: 1,
+          f: (r) => fmt(r.in_tok + r.cache_read + r.cache_write),
+        },
+        { h: "Out", num: 1, f: (r) => fmt(r.out_tok) },
+        { h: "Est.", num: 1, f: (r) => money(r.cost) },
+      ];
+      async function loadRequests() {
+        const p = $("#reqProj").value;
+        $("#reqTable").replaceChildren(
+          table(
+            reqCols,
+            await api(
+              "/admin/api/requests?limit=150" + (p ? "&project=" + p : ""),
+            ),
+          ),
+        );
+      }
+      async function loadErrors() {
+        $("#errTable").replaceChildren(
+          table(
+            [
+              { h: "When", f: (r) => ago(r.ts) },
+              { h: "Project", f: (r) => r.project ?? "—" },
+              { h: "IP", k: "ip" },
+              { h: "Path", k: "path" },
+              { h: "Model", f: (r) => r.model ?? "" },
+              { h: "Status", k: "status", cls: () => "bad" },
+              { h: "Error", f: (r) => r.error ?? "", cls: () => "err" },
+            ],
+            await api("/admin/api/requests?errors=1&limit=200"),
+          ),
+        );
+      }
+      $("#clearErr").addEventListener("click", async () => {
+        await api("/admin/api/errors", { method: "DELETE" });
+        loadErrors();
+      });
+
+      let busy = false;
+      async function refresh() {
+        if (busy || $("#app").classList.contains("hidden")) return;
+        busy = true;
+        try {
+          await loadProjects();
+          await loadStatus();
+          if (tab === "overview") await loadOverviewBars();
+          if (tab === "usage") await loadUsage();
+          if (tab === "requests") await loadRequests();
+          if (tab === "errors") await loadErrors();
+        } catch (e) {
+          if (e.message !== "auth") console.error(e);
+        } finally {
+          busy = false;
+        }
+      }
+      setInterval(() => {
+        // The projects tab holds forms and open details; refresh it only after actions.
+        if (tab !== "projects") refresh();
+      }, 5000);
+      api("/admin/api/status")
+        .then(() => {
+          $("#app").classList.remove("hidden");
+          refresh();
+        })
+        .catch(() => {});
+    </script>
+  </body>
+</html>
