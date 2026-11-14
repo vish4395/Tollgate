@@ -1,4 +1,4 @@
-// Claude gateway dashboard. Plain JavaScript, no build step, no outside files.
+// Tollgate dashboard. Plain JavaScript, no build step, no outside files.
 "use strict";
 
 /* =========================================================================
@@ -836,7 +836,7 @@ function showLogin(msg) {
           "div",
           { class: "brand", style: "padding:0 0 12px" },
           h("span", { class: "dot ok" }),
-          "Claude Gateway",
+          "Tollgate",
         ),
         form,
         h(
@@ -880,7 +880,7 @@ function renderShell() {
         class: "dot " + (ok ? "ok" : st ? "bad" : ""),
         title: ok ? "Backend healthy" : "Backend not healthy",
       }),
-      "Claude Gateway",
+      "Tollgate",
     ),
     NAV.map(([id, label]) => navLink(id, label)),
     h("div", { class: "grow" }),
@@ -988,7 +988,7 @@ async function route() {
     S.status = null;
   }
   const main = renderShell();
-  document.title = `${NAV.find((n) => n[0] === def)?.[1] ?? "Gateway"} · Claude Gateway`;
+  document.title = `${NAV.find((n) => n[0] === def)?.[1] ?? "Gateway"} · Tollgate`;
   main.append(skeleton());
   let refresh = null;
   try {

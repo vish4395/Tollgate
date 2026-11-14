@@ -43,7 +43,7 @@ const okMessage = (model) => ({
  *   ok | limited | signed_out | stream_limited | server_error | hang
  * Profile "" is a request without the account header.
  */
-export async function fakeBackend({ profiles = [], mode = {} } = {}) {
+export async function fakeBackend({ profiles = [], mode = {}, quota = {}, delayMs = 0 } = {}) {
   const hits = [];
   const server = http.createServer(async (req, res) => {
     const chunks = [];
@@ -52,13 +52,15 @@ export async function fakeBackend({ profiles = [], mode = {} } = {}) {
     const profile = req.headers["x-meridian-profile"] ?? "";
     const url = req.url.split("?")[0];
     if (url === "/health") return json(res, 200, { status: "healthy", version: "fake", auth: { loggedIn: true, planLabel: "Max" } });
-    if (url === "/profiles/list") return json(res, 200, { profiles: profiles.map((id) => ({ id, loggedIn: mode[id] !== "signed_out_listed", email: `${id}@x` })) });
+    if (url === "/profiles/list")
+      return json(res, 200, { profiles: profiles.map((id) => ({ id, loggedIn: mode[id] !== "signed_out_listed", email: `${id}@example.com`, subscriptionType: "Max", daysUntilRenewal: 21 })) });
     if (url === "/v1/usage/quota/all")
-      return json(res, 200, { profiles: (profiles.length ? profiles : ["default"]).map((id) => ({ id, windows: [{ type: "five_hour", utilization: 0.1, resetsAt: Date.now() + 3600e3 }, { type: "seven_day", utilization: 0.2, resetsAt: Date.now() + 864e5 }] })) });
+      return json(res, 200, { profiles: (profiles.length ? profiles : ["default"]).map((id) => ({ id, windows: [{ type: "five_hour", utilization: quota[id]?.[0] ?? 0.1, resetsAt: Date.now() + 3600e3 }, { type: "seven_day", utilization: quota[id]?.[1] ?? 0.2, resetsAt: Date.now() + 864e5 }] })) });
     if (url === "/v1/models") return json(res, 200, { data: [{ id: "claude-haiku-5-5", display_name: "Haiku" }, { id: "claude-sonnet-5-5", display_name: "Sonnet" }] });
     if (url === "/telemetry/summary") return json(res, 200, {});
     if (req.headers["x-api-key"] !== "internal-test-key") return json(res, 401, { type: "error", error: { type: "authentication_error", message: "bad internal key" } });
     hits.push({ url, profile, body, headers: req.headers });
+    if (delayMs) await new Promise((r) => setTimeout(r, delayMs * (0.5 + Math.random())));
     const m = mode[profile] ?? "ok";
     if (m === "limited") return json(res, 429, { type: "error", error: { type: "rate_limit_error", message: "Claude Max rate limit reached." }, retry_after: 120 }, { "retry-after": "120" });
     if (m === "signed_out") return json(res, 401, { type: "error", error: { type: "authentication_error", message: "Not logged in" } });
@@ -93,9 +95,9 @@ export async function fakeBackend({ profiles = [], mode = {} } = {}) {
 }
 
 /** Starts a gateway in a temp folder. Returns { url, key(name), admin(path, opts), stop }. */
-export async function startGateway(backend, overrides = {}) {
+export async function startGateway(backend, overrides = {}, { port: fixedPort } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "cgw-test-"));
-  const port = await freePort();
+  const port = fixedPort ?? (await freePort());
   writeFileSync(join(dir, ".internal-key"), "internal-test-key");
   const cfg = {
     host: "127.0.0.1",

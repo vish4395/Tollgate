@@ -58,7 +58,7 @@ export function createNotifier({ cfg, events }) {
       const t = text(a);
       const r = await fetch(c.url, {
         method: "POST",
-        headers: { "content-type": "application/json", "user-agent": "claude-gateway" },
+        headers: { "content-type": "application/json", "user-agent": "tollgate" },
         // text: Slack, Google Chat, Teams (simple); content: Discord. The rest is for your own endpoint.
         body: JSON.stringify({ text: t, content: t.slice(0, 1900), kind: a.kind, severity: a.severity, subject: a.subject, title: a.title, message: a.message, resolved: !!a.resolved, at: new Date().toISOString() }),
         redirect: "manual",
@@ -79,7 +79,7 @@ export function createNotifier({ cfg, events }) {
     },
     async email(c, a) {
       if (!c.host || !c.from || !c.to) throw new Error("Email needs a server, a From and a To address.");
-      await sendMail({ ...c, port: Number(c.port), subject: `[Claude gateway] ${title(a)}`, text: text(a) });
+      await sendMail({ ...c, port: Number(c.port), subject: `[Tollgate] ${title(a)}`, text: text(a) });
     },
   };
 

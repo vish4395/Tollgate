@@ -1,4 +1,4 @@
-// Claude gateway: per-project API keys, Claude accounts with fallback, limits, usage tracking,
+// Tollgate: per-project API keys, Claude accounts with fallback, limits, usage tracking,
 // monitoring and alerts in front of the Claude backend. Plain Node 22, no npm dependencies.
 import http from "node:http";
 import https from "node:https";
