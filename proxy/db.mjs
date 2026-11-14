@@ -9,6 +9,7 @@ const LATER_COLUMNS = {
     max_tokens_cap: "INTEGER",
     quota_cap_pct: "INTEGER",
     expires_at: "TEXT",
+    allowed_origins: "TEXT",
   },
   requests: { ttfb_ms: "INTEGER", max_tokens: "INTEGER", user_agent: "TEXT" },
 };

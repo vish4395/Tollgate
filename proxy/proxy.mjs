@@ -1,4 +1,5 @@
 // Forwards /v1/* to Meridian after checking the project key and every limit, and logs usage.
+import { originAllowed, originList } from "./cors.mjs";
 import { hashKey } from "./db.mjs";
 import { send, apiError, readBody, clientIp } from "./http-util.mjs";
 
@@ -325,6 +326,13 @@ export function createProxy({ cfg, db, upstream }) {
       );
     }
     row.project_id = project.id;
+
+    // A browser call must come from an origin this project allows (its key is visible to that page).
+    const origin = req.headers.origin;
+    if (origin && !originAllowed(originList(project.allowed_origins), origin)) {
+      log({ ...row, status: 403, error: `Origin not allowed: ${origin}` });
+      return apiError(res, 403, "permission_error", `Origin ${origin} is not allowed for this key. Add it under the project's allowed web origins.`);
+    }
 
     if (
       req.method === "GET" &&

@@ -1,4 +1,5 @@
 // Dashboard API: sign-in, status, projects, models, usage, requests, playground and settings.
+import { originList } from "./cors.mjs";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { execFile } from "node:child_process";
 import { newKey } from "./db.mjs";
@@ -147,6 +148,7 @@ export function createAdmin({ cfg, db, upstream, proxy, scheme, backend }) {
     quotaCapPct: p.quota_cap_pct,
     expiresAt: p.expires_at,
     allowedModels: p.allowed_models ?? "",
+    allowedOrigins: p.allowed_origins ?? "",
     note: p.note ?? "",
     createdAt: p.created_at,
     lastUsedAt: p.last_used_at,
@@ -245,7 +247,7 @@ export function createAdmin({ cfg, db, upstream, proxy, scheme, backend }) {
       };
       db.prepare(
         `UPDATE projects SET name = ?, enabled = ?, daily_request_cap = ?, daily_token_cap = ?, monthly_token_cap = ?,
-           rpm_cap = ?, max_tokens_cap = ?, quota_cap_pct = ?, expires_at = ?, allowed_models = ?, note = ? WHERE id = ?`,
+           rpm_cap = ?, max_tokens_cap = ?, quota_cap_pct = ?, expires_at = ?, allowed_models = ?, allowed_origins = ?, note = ? WHERE id = ?`,
       ).run(
         pick("name", "name", (v) => String(v).trim().slice(0, 60) || p.name),
         pick("enabled", "enabled", (v) => (v ? 1 : 0)),
@@ -257,6 +259,7 @@ export function createAdmin({ cfg, db, upstream, proxy, scheme, backend }) {
         pick("quotaCapPct", "quota_cap_pct", pctv),
         pick("expiresAt", "expires_at", expires),
         pick("allowedModels", "allowed_models", (v) => String(v).slice(0, 500)),
+        pick("allowedOrigins", "allowed_origins", (v) => originList(v).join(", ").slice(0, 1000)),
         pick("note", "note", (v) => String(v).slice(0, 200)),
         p.id,
       );

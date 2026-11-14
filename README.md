@@ -30,17 +30,18 @@ your apps ──project key──▶  Gateway  :4100  ──internal key──�
 2. [Install](#install)
 3. [Create a key and make your first call](#create-a-key-and-make-your-first-call)
 4. [Connect your apps](#connect-your-apps)
-5. [Dashboard](#dashboard)
-6. [Limits and models](#limits-and-models)
-7. [Optional: https](#optional-https)
-8. [Optional: a separate Claude sign-in for the gateway](#optional-a-separate-claude-sign-in-for-the-gateway)
-9. [Commands](#commands)
-10. [Configuration](#configuration)
-11. [Troubleshooting](#troubleshooting)
-12. [Security notes](#security-notes)
-13. [How it works](#how-it-works)
-14. [Uninstall](#uninstall)
-15. [Credits and license](#credits-and-license)
+5. [Call it from a web page (browser)](#call-it-from-a-web-page-browser)
+6. [Dashboard](#dashboard)
+7. [Limits and models](#limits-and-models)
+8. [Optional: https](#optional-https)
+9. [Optional: a separate Claude sign-in for the gateway](#optional-a-separate-claude-sign-in-for-the-gateway)
+10. [Commands](#commands)
+11. [Configuration](#configuration)
+12. [Troubleshooting](#troubleshooting)
+13. [Security notes](#security-notes)
+14. [How it works](#how-it-works)
+15. [Uninstall](#uninstall)
+16. [Credits and license](#credits-and-license)
 
 ---
 
@@ -150,6 +151,30 @@ print(client.messages.create(model="claude-haiku-5-5", max_tokens=200,
 **Speed:** expect roughly 1.5–3 s for a short reply with Haiku. Each request runs through the Claude Code CLI, so it's slower than the paid API.
 
 **Apps that block private addresses:** some apps refuse `http://` URLs or private IPs (`192.168.x.x`, `localhost`) for safety. Look for a setting that allows a private host, or use [https](#optional-https).
+
+## Call it from a web page (browser)
+
+Browsers block calls to another address unless that address allows the page's origin (CORS). The gateway allows **no** origins by default. To allow some for one project:
+
+1. In the dashboard, open **Projects**, then the project.
+2. Set **Allowed web origins** to the exact origins of your pages, separated by commas, for example `http://localhost:5173, http://192.168.11.20:3000`. Use `*` to allow any origin (only for local experiments).
+3. Click **Save**.
+
+The gateway then answers the browser's preflight check. It refuses a request with that project's key when the request comes from a page whose origin isn't on the list (`403 permission_error`). Calls from servers carry no origin and aren't affected.
+
+```js
+const res = await fetch("http://192.168.11.61:4100/v1/messages", {
+  method: "POST",
+  headers: { "content-type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
+  body: JSON.stringify({ model: "claude-haiku-5-5", max_tokens: 300,
+    messages: [{ role: "user", content: "Hello" }] }),
+});
+console.log((await res.json()).content.at(-1).text);
+```
+
+With the Anthropic JS SDK, pass `baseURL`, `apiKey` and `dangerouslyAllowBrowser: true`. If your page is served over https, call the gateway over https as well ([Optional: https](#optional-https)), or the browser blocks the call as mixed content.
+
+> **The key is visible to anyone who opens the page.** Use a separate project per web app, with tight limits (requests per minute, tokens per day). Keep browser use to your own network. For a public site, call the gateway from your site's server, not from the browser.
 
 ## Dashboard
 

@@ -14,6 +14,7 @@ import {
 } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { join } from "node:path";
+import { homedir } from "node:os";
 import {
   ROOT,
   IS_WIN,
@@ -24,8 +25,9 @@ import {
   lockedPid,
 } from "./paths.mjs";
 
-for (const d of ["logs", "data", "work"])
-  mkdirSync(join(ROOT, d), { recursive: true });
+for (const d of ["logs", "data"]) mkdirSync(join(ROOT, d), { recursive: true });
+const WORK_DIR = join(homedir(), ".claude-gateway-work");
+mkdirSync(WORK_DIR, { recursive: true });
 
 // One supervisor per folder.
 const other = lockedPid();
@@ -68,7 +70,8 @@ function backendEnv() {
     MERIDIAN_PASSTHROUGH: "1",
     MERIDIAN_MAX_CONCURRENT: "2",
     MERIDIAN_NO_UPDATE_CHECK: "1",
-    MERIDIAN_WORKDIR: join(ROOT, "work"),
+    // Outside any git repo, so the model never sees this folder's files or git status.
+    MERIDIAN_WORKDIR: WORK_DIR,
     MERIDIAN_TELEMETRY_PERSIST: "1",
     MERIDIAN_TELEMETRY_DB: join(ROOT, "data", "meridian-telemetry.db"),
     MERIDIAN_TELEMETRY_RETENTION_DAYS: "7",

@@ -1,5 +1,6 @@
 // Claude gateway: per-project API keys, limits and usage tracking in front of Meridian.
 // Plain Node 22, no npm dependencies.
+import { anyProjectAllows, preflight, setCors } from "./cors.mjs";
 import http from "node:http";
 import https from "node:https";
 import { readFileSync, existsSync } from "node:fs";
@@ -91,6 +92,12 @@ async function handler(req, res) {
       });
     }
     if (path.startsWith("/v1/")) {
+      const origin = req.headers.origin;
+      if (origin && anyProjectAllows(db, origin)) {
+        if (req.method === "OPTIONS") return preflight(req, res, origin);
+        setCors(req, res, origin);
+      } else if (req.method === "OPTIONS")
+        return send(res, 403, "Origin not allowed.");
       if (!API_PATHS.includes(path) && !path.startsWith("/v1/models/"))
         return apiError(res, 404, "not_found_error", "Unknown endpoint.");
       return await proxy.handle(req, res, path);
