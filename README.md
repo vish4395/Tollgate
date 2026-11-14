@@ -150,6 +150,8 @@ print(client.messages.create(model="claude-haiku-5-5", max_tokens=200,
 
 **Speed:** expect roughly 1.5–3 s for a short reply with Haiku. Each request runs through the Claude Code CLI, so it's slower than the paid API.
 
+**Apps on other networks** (shared hosting, a VPS, the cloud): see [docs/remote-access.md](docs/remote-access.md) for a public https address through a Cloudflare tunnel, ngrok or Tailscale.
+
 **Apps that block private addresses:** some apps refuse `http://` URLs or private IPs (`192.168.x.x`, `localhost`) for safety. Look for a setting that allows a private host, or use [https](#optional-https).
 
 ## Call it from a web page (browser)
@@ -163,7 +165,7 @@ Browsers block calls to another address unless that address allows the page's or
 The gateway then answers the browser's preflight check. It refuses a request with that project's key when the request comes from a page whose origin isn't on the list (`403 permission_error`). Calls from servers carry no origin and aren't affected.
 
 ```js
-const res = await fetch("http://192.168.11.61:4100/v1/messages", {
+const res = await fetch("http://GATEWAY-IP:4100/v1/messages", {
   method: "POST",
   headers: { "content-type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
   body: JSON.stringify({ model: "claude-haiku-5-5", max_tokens: 300,
