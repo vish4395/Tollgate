@@ -44,7 +44,24 @@ const SCHEME = TLS ? "https" : "http";
 
 const upstream = createUpstream(cfg);
 const proxy = createProxy({ cfg, db, upstream });
-const admin = createAdmin({ cfg, db, upstream, proxy, scheme: SCHEME });
+// The supervisor (gateway.mjs) runs the backend and tells us its process id over IPC.
+let backendPid = null;
+process.on("message", (m) => {
+  if (m?.type === "backend-pid") backendPid = m.pid;
+});
+const backend = {
+  pid: () => backendPid,
+  restart: () =>
+    process.send ? (process.send({ type: "restart-backend" }), true) : false,
+};
+const admin = createAdmin({
+  cfg,
+  db,
+  upstream,
+  proxy,
+  scheme: SCHEME,
+  backend,
+});
 
 const API_PATHS = [
   "/v1/messages",

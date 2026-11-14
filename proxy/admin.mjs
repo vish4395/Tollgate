@@ -45,18 +45,43 @@ function run(cmd, args) {
   );
 }
 
-async function memory() {
+/** Every process with its parent and memory (KB), on macOS, Linux and Windows. */
+async function processList() {
+  if (process.platform === "win32") {
+    const r = await run("powershell", [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId)`t$($_.ParentProcessId)`t$([math]::Round($_.WorkingSetSize/1024))`t$($_.Name) $($_.CommandLine)" }',
+    ]);
+    return r.out
+      .split(/\r?\n/)
+      .map((l) => l.split("\t"))
+      .filter((p) => p.length >= 4)
+      .map(([pid, ppid, rss, ...cmd]) => ({
+        pid: +pid,
+        ppid: +ppid,
+        rss: +rss,
+        cmd: cmd.join(" "),
+      }));
+  }
   const r = await run("ps", ["-axo", "pid=,ppid=,rss=,command="]);
-  const procs = r.out
+  return r.out
     .split("\n")
     .map((l) => /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.*)$/.exec(l))
     .filter(Boolean)
     .map((m) => ({ pid: +m[1], ppid: +m[2], rss: +m[3], cmd: m[4] }));
-  const root = procs.find((p) =>
-    /meridian\/node_modules\/(\.bin\/meridian|@rynfar\/meridian\/dist\/cli)/.test(
-      p.cmd,
-    ),
-  );
+}
+
+async function memory(backendPid) {
+  const procs = await processList();
+  const root =
+    procs.find((p) => p.pid === backendPid) ??
+    procs.find((p) =>
+      /meridian[\\/]node_modules[\\/](\.bin[\\/]meridian|@rynfar[\\/]meridian[\\/]dist[\\/]cli)/.test(
+        p.cmd,
+      ),
+    );
   let kb = 0;
   let cli = 0;
   if (root) {
@@ -83,7 +108,7 @@ async function memory() {
   };
 }
 
-export function createAdmin({ cfg, db, upstream, proxy, scheme }) {
+export function createAdmin({ cfg, db, upstream, proxy, scheme, backend }) {
   const sign = (v) =>
     createHmac("sha256", cfg.sessionSecret).update(v).digest("base64url");
   const makeSession = () => {
@@ -130,7 +155,7 @@ export function createAdmin({ cfg, db, upstream, proxy, scheme }) {
   const routes = {
     "GET /admin/api/status": async () => {
       const [mem, health, quota, tele] = await Promise.all([
-        memory(),
+        memory(backend.pid()),
         upstream.health(),
         upstream.getQuota(),
         upstream.telemetry(),
@@ -586,17 +611,16 @@ export function createAdmin({ cfg, db, upstream, proxy, scheme }) {
       saveConfig(cfg);
       return { ok: true, signedOut: true };
     },
-    "POST /admin/api/restart-backend": async () => {
-      const uid = process.getuid?.();
-      const r = await run("launchctl", [
-        "kickstart",
-        "-k",
-        `gui/${uid}/com.local.claude-gateway.meridian`,
-      ]);
-      return r.ok
+    "POST /admin/api/restart-backend": async () =>
+      backend.restart()
         ? { ok: true }
-        : [500, { error: r.err.slice(0, 300) || "Restart failed." }];
-    },
+        : [
+            500,
+            {
+              error:
+                "The gateway is not running under its supervisor (start it with: node proxy/cli.mjs start).",
+            },
+          ],
   };
 
   async function handle(req, res, path, url) {
