@@ -15,7 +15,7 @@ export function createUpstream(cfg) {
   let quota = { at: 0, data: null, error: null };
 
   async function listModels(force = false) {
-    if (!force && models.list.length && Date.now() - models.at < 10 * 60_000)
+    if (!force && Date.now() - models.at < 10 * 60_000)
       return models.list;
     try {
       const d = await get("/v1/models");
@@ -29,7 +29,8 @@ export function createUpstream(cfg) {
         })),
       };
     } catch {
-      /* keep the last good list */
+      // Keep the last good list, and don't ask again for a minute.
+      models.at = Date.now() - 9 * 60_000;
     }
     return models.list;
   }
@@ -93,5 +94,23 @@ export function createUpstream(cfg) {
     }
   }
 
-  return { listModels, getQuota, fiveHourPct, health, telemetry };
+  /** Every account (profile) with its sign-in state, or null when the backend can't be read. */
+  async function profiles() {
+    try {
+      return await get("/profiles/list");
+    } catch {
+      return null;
+    }
+  }
+
+  /** Quota windows for every account, or null. */
+  async function quotaAll() {
+    try {
+      return await get("/v1/usage/quota/all", 10_000);
+    } catch {
+      return null;
+    }
+  }
+
+  return { listModels, getQuota, fiveHourPct, health, telemetry, profiles, quotaAll };
 }
