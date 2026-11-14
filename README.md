@@ -9,14 +9,12 @@ your apps ──project key──▶  Gateway  :4100  ──internal key──�
 ```
 
 - **Standard APIs:** Anthropic `POST /v1/messages`, OpenAI-style `POST /v1/chat/completions` and `GET /v1/models`, with streaming and tool calling (your app's own tools come back as normal `tool_use` blocks).
-- **Per-project keys** with limits: requests per minute and per day, tokens per day and per month, allowed models, key expiry, and "pause above X% of the subscription's 5-hour quota".
+- **Per-project keys** with limits: requests per minute and per day, tokens per day and per month, max output tokens, allowed models, key expiry, allowed web origins, and "pause above X% of an account's 5-hour quota".
+- **Several Claude accounts with automatic fallback:** when one account hits its usage limit or is signed out, the next one takes over. Each project can choose which accounts it may use and in what order. See [docs/accounts.md](docs/accounts.md).
+- **Monitoring and alerts:** a sample every minute (uptime, latency, failures, queue, memory, each account's quota), and alerts for account limits, sign-outs, backend outages, error spikes, slow replies and project caps. Alerts go to the dashboard and, if you set them up, a webhook (Slack, Discord, Teams, Google Chat), Telegram or email. See [docs/alerts.md](docs/alerts.md).
 - **Usage tracking** for every request: project, model, tokens, estimated cost, latency, time to first token, status and errors. Prompts and replies are never stored.
-- **Dashboard** with:
-  - live status and subscription quota (5-hour and 7-day windows)
-  - charts, per-model settings and aliases
-  - a request log with details and CSV export
-  - a playground, settings and a list of blocked addresses
-- **Low memory:** about 160 MB when idle, using plain Node with no npm dependencies for the gateway itself.
+- **Dashboard** (desktop and phone, light and dark): overview with a setup checklist, projects, accounts, models, usage, a searchable request log, monitoring charts, alerts, an activity and audit log, a streaming playground, and settings with backup and restore.
+- **Low memory:** about 130–160 MB when idle, using plain Node with no npm dependencies for the gateway itself.
 - **Runs on macOS, Linux and Windows.** It starts at login as a user service (launchd, systemd or Task Scheduler), and a small supervisor restarts the backend or gateway if either stops.
 - **Optional https** with a locally trusted certificate, and an **optional separate Claude sign-in** so the gateway never shares your interactive Claude Code session.
 
@@ -33,15 +31,18 @@ your apps ──project key──▶  Gateway  :4100  ──internal key──�
 5. [Call it from a web page (browser)](#call-it-from-a-web-page-browser)
 6. [Dashboard](#dashboard)
 7. [Limits and models](#limits-and-models)
-8. [Optional: https](#optional-https)
-9. [Optional: a separate Claude sign-in for the gateway](#optional-a-separate-claude-sign-in-for-the-gateway)
-10. [Commands](#commands)
-11. [Configuration](#configuration)
-12. [Troubleshooting](#troubleshooting)
-13. [Security notes](#security-notes)
-14. [How it works](#how-it-works)
-15. [Uninstall](#uninstall)
-16. [Credits and license](#credits-and-license)
+8. [Claude accounts and fallback](#claude-accounts-and-fallback)
+9. [Monitoring and alerts](#monitoring-and-alerts)
+10. [Optional: https](#optional-https)
+11. [Optional: a separate Claude sign-in for the gateway](#optional-a-separate-claude-sign-in-for-the-gateway)
+12. [Commands](#commands)
+13. [Configuration](#configuration)
+14. [Troubleshooting](#troubleshooting)
+15. [Security notes](#security-notes)
+16. [How it works](#how-it-works)
+17. [Tests](#tests)
+18. [Uninstall](#uninstall)
+19. [Credits and license](#credits-and-license)
 
 ---
 
@@ -180,15 +181,19 @@ With the Anthropic JS SDK, pass `baseURL`, `apiKey` and `dangerouslyAllowBrowser
 
 ## Dashboard
 
-| Tab            | What you get                                                                                                                                                                                                                       |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Overview**   | Backend health, Claude sign-in, subscription quota (5-hour / 7-day with reset times), today's requests, tokens and est. cost, speed, memory, a 14-day chart by project, latest errors, and warnings when something needs attention |
-| **Projects**   | Create, rename, disable, rotate or delete keys. Set limits and see usage bars against them. Connection details and code samples per project                                                                                        |
-| **Models**     | Every model with its context window. Turn models on or off, set aliases, an output-token hint and prices for the cost estimate, and pick the default model                                                                         |
-| **Usage**      | Per project, model, day and address: requests, errors, tokens, est. cost, first-token time and p50/p95 latency. CSV export                                                                                                         |
-| **Requests**   | Every call, with filters and a details panel (status, timings, tokens, error). Load more, clear error messages                                                                                                                     |
-| **Playground** | Send a prompt to any model and see the reply, time, tokens and cost                                                                                                                                                                |
-| **Settings**   | Concurrency, queue, timeout, history length, wrong-key blocking, address shown to clients and family prices. Restart the backend, change the admin password, unblock addresses                                                     |
+| Page           | What you get                                                                                                                                         |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Overview**   | Open alerts first, a setup checklist, today's requests, tokens and est. cost, speed, load, memory, every account's quota, a 14-day chart, latest errors |
+| **Projects**   | One page per project with tabs: limits, which accounts it may use (and order), web access (CORS), connection snippets (curl, .env, PHP, Node, Python, OpenAI-style) with a key test, and its requests |
+| **Accounts**   | Each Claude account: state, plan, 5-hour and 7-day use with reset times, sign-in renewal, today's use, order, on/off, reserve limits, test, "use again now" |
+| **Models**     | Turn models on or off, aliases, max output tokens, prices for the cost estimate, default model                                                       |
+| **Usage**      | Today / 7 / 30 / 90 days by project, account, model, day and address. Chart with a table view. CSV export                                            |
+| **Requests**   | Live log (pausable) with search and filters (project, account, result, dates), details panel, older pages, CSV                                       |
+| **Monitoring** | 90-day uptime strip, requests and failures, response time, account quota history, queue and memory over 1 h / 24 h / 7 d / 30 d                       |
+| **Alerts**     | Open alerts, history, rules and thresholds, quiet hours, and channels (webhook, Telegram, email) with a test button                                  |
+| **Activity**   | Restarts, account changes, fallbacks, blocked addresses, sign-ins and every dashboard change (audit log)                                             |
+| **Playground** | Streams a reply from any model and account, with time to first token and token counts                                                                |
+| **Settings**   | Gateway, network and time zone, trusted proxy, backend (restart, max-tokens enforcement, metrics), prices, password, sign out everywhere, blocked addresses, backup and restore |
 
 "Est. cost" is what the same tokens would cost on the paid API. It helps you compare projects; your subscription isn't billed per token.
 
@@ -199,17 +204,61 @@ With the Anthropic JS SDK, pass `baseURL`, `apiKey` and `dangerouslyAllowBrowser
 | Limit                             | Behaviour                                                                                                              |
 | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | Requests / minute, Requests / day | `429` once reached                                                                                                     |
-| Tokens / day, Tokens / month      | Counts input, output and cache tokens of successful requests; `429` once reached                                       |
-| Pause above 5-hour quota %        | Refuses requests while the subscription's 5-hour usage is at or above this %, so one app can't use up your quota       |
-| Allowed models                    | Comma list, matched by substring (`haiku,sonnet`)                                                                      |
-| Key expires on                    | `403` after that date                                                                                                  |
-| Max output tokens (hint)          | Lowers the `max_tokens` a client sends. **The CLI backend treats it as a hint**, so use the token limits for hard caps |
+| Tokens / day, Tokens / month      | Counts input, output and cache tokens of successful requests; `429` once reached. Days and months follow the gateway's time zone |
+| Pause above 5-hour use %          | Skips any account whose 5-hour use is at or above this %, so one app can't use up your quota                           |
+| Allowed models                    | Comma list of exact model ids or aliases (`claude-haiku-5-5,sonnet`)                                                   |
+| Key expires on                    | The key works until the end of that day, then `403`                                                                    |
+| Max output tokens                 | Lowers the `max_tokens` a client sends; replies stop at about that length (`stop_reason: max_tokens`)                        |
+| Accounts                          | Which Claude accounts the project may use, in order. Empty = all                                                       |
+| Allowed web origins               | Browser pages that may call with this key (CORS)                                                                       |
 
 **Gateway-wide:**
 
-- At most 2 requests run at once and the rest queue (Settings).
+- At most 2 requests run at once; the rest wait up to 60 seconds in a queue of 20, then get `429` with `Retry-After` (Settings).
+- A request is cut off when the backend sends nothing for 3 minutes (long streamed replies are fine).
+- A client that disconnects frees its place at once.
+- Request bodies are limited to 10 MB.
 - An address that sends 20 wrong keys in a minute is blocked for 10 minutes.
 - Unknown model names get a clear `400`.
+- Every response carries `x-gateway-request-id`, which you can search for under Requests.
+
+## Claude accounts and fallback
+
+By default the gateway uses this computer's Claude sign-in. Add more accounts to share load and keep working when one hits its usage limit:
+
+```bash
+node proxy/cli.mjs account add work          # a browser opens: sign in with that account
+node proxy/cli.mjs account add main          # add your own account too (see below)
+node proxy/cli.mjs account list
+```
+
+- Requests go to the **first ready account** in the order set on the **Accounts** page.
+- When an account answers "rate limited", the gateway pauses it until its limit resets (or the time the backend gives) and **retries the same request on the next account**. A signed-out account is skipped until you sign it in again. Your app sees one normal reply.
+- Each **project** can be limited to some accounts, in its own order (Projects → Accounts).
+- Each account can keep a **reserve**: stop using it above a 5-hour or 7-day percentage, so you keep headroom for your own Claude use.
+- **Once you add a named account, the gateway stops using this computer's own sign-in**, so also add your main account with `account add main`.
+
+Only add accounts that are yours. Using several accounts to get around usage limits may break Anthropic's terms. Details: [docs/accounts.md](docs/accounts.md).
+
+## Monitoring and alerts
+
+The gateway records a sample every minute and checks these rules (each can be turned off or tuned under **Alerts → Rules**):
+
+| Alert | Default |
+|---|---|
+| Account near its limit | 5-hour use ≥ 80 % or 7-day ≥ 90 % |
+| Account limit reached / signed out / sign-in expiring | When it happens; renewal within 7 days |
+| No Claude account available | A request found no usable account |
+| Backend down | Unhealthy for 2 minutes, or 3 restarts in 10 minutes |
+| Many requests failing | ≥ 20 % of at least 10 requests in 5 minutes |
+| Slow responses (off by default) | Slowest 5 % over 60 s for 10 minutes |
+| Queue full | Requests refused or timed out in the queue |
+| Project near / at its limit | 80 % and 100 % of a daily or monthly cap |
+| Security | An address blocked for bad keys; 10 failed dashboard sign-ins in 15 minutes |
+
+Alerts close by themselves when the problem goes away. Under **Alerts → Where alerts go**, send them to a **webhook** (Slack, Discord, Microsoft Teams, Google Chat or your own endpoint), **Telegram** or **email** (any SMTP server), each with a minimum severity and a test button. Set reminders and quiet hours under Rules (critical alerts still go out during quiet hours).
+
+For Grafana or Uptime Kuma, turn on **Settings → Backend → Metrics endpoint** and scrape `/metrics` with the token shown. Details: [docs/alerts.md](docs/alerts.md).
 
 ## Optional: https
 
@@ -255,10 +304,13 @@ node proxy/cli.mjs uninstall               # stop and remove the login service (
 node proxy/cli.mjs status                  # service, supervisor, backend, sign-in, dashboard address
 node proxy/cli.mjs start | stop | restart
 node proxy/cli.mjs logs                    # last lines of logs/gateway.log, proxy.log, meridian.log
-node proxy/cli.mjs login                   # give the gateway its own Claude sign-in
+node proxy/cli.mjs account add <name> [--token]   # add a Claude account (browser sign-in, or a setup token)
+node proxy/cli.mjs account list | login <name> | rename <old> <new> | remove <name>
+node proxy/cli.mjs login                   # give the gateway its own single Claude sign-in
 node proxy/cli.mjs add-project <name>      # create a project key in the terminal
 node proxy/cli.mjs set-password '<new>'    # reset the dashboard password
 node proxy/cli.mjs run                     # run in the foreground (no service), Ctrl+C to stop
+npm test                                   # run the test suite (no install needed)
 ```
 
 **Updating:**
@@ -275,14 +327,22 @@ node proxy/cli.mjs run                     # run in the foreground (no service),
 | `httpPort`                   | `4180`             | Plain http port when https is on                    |
 | `host`                       | `0.0.0.0`          | Listen address. Use `127.0.0.1` for this Mac only   |
 | `publicHost`                 | your LAN IP        | Address shown in connection details                 |
-| `maxConcurrent` / `maxQueue` | `2` / `20`         | Requests run at once / waiting                      |
-| `requestTimeoutMs`           | `180000`           | Per-request timeout                                 |
+| `publicUrl`                  | empty              | Public address (tunnel), shown instead of the LAN one |
+| `maxConcurrent` / `maxQueue` | `2` / `20`         | Requests run at once / waiting (also sets the backend's limit) |
+| `queueTimeoutMs`             | `60000`            | Longest wait in the queue                           |
+| `requestTimeoutMs`           | `180000`           | Cut off when the backend is silent this long        |
+| `maxBodyMb`                  | `10`               | Largest request body                                |
+| `timeZone`                   | this computer's    | When daily and monthly limits reset                 |
+| `trustedProxy`               | `none`             | `cloudflare` or `forwarded` when behind a tunnel or proxy ([remote access](docs/remote-access.md)) |
+| `enforceMaxTokens`           | `true`             | Backend stops replies at `max_tokens`               |
+| `metricsEnabled`             | `false`            | Serve `/metrics` (Prometheus) with a bearer token   |
+| `alerts`, `notify`           |                    | Alert rules and channels (edit under Alerts)        |
 | `retentionDays`              | `30`               | Request history kept                                |
 | `badKeyLimit`                | `20`               | Wrong keys per minute before a 10-minute block      |
 | `defaultModel`               | `claude-haiku-5-5` | Used when a request names no model                  |
 | `pricing`                    | per family         | $ per million tokens, for estimates only            |
 
-Meridian's settings are in `proxy/gateway.mjs` (`backendEnv`); it is bound to `127.0.0.1:4101` and only the gateway talks to it.
+Meridian's settings are in `proxy/gateway.mjs` (`backendEnv`); it is bound to `127.0.0.1:4101` and only the gateway talks to it. It runs in `~/.claude-gateway-work`, outside any git repository, so the model never sees your files.
 
 **Files:**
 
@@ -292,9 +352,10 @@ Meridian's settings are in `proxy/gateway.mjs` (`backendEnv`); it is bound to `1
 | `ADMIN_PASSWORD.txt`           | first admin password                           | no     |
 | `.internal-key`                | key between gateway and Meridian               | no     |
 | `.oauth-token`, `claude-home/` | optional separate Claude sign-in               | no     |
-| `gateway.db`                   | projects (key hashes) and request log (SQLite) | no     |
+| `gateway.db`                   | projects (key hashes), accounts, request log, samples, alerts, activity (SQLite) | no |
+| `data/meridian-config/`        | named Claude accounts (backend profiles)       | no     |
 | `certs/`                       | optional https certificate                     | no     |
-| `logs/`, `data/`, `work/`      | logs, Meridian telemetry, CLI working folder   | no     |
+| `logs/`, `data/`               | logs (rotated at 10 MB, 3 kept), Meridian telemetry | no |
 
 ## Troubleshooting
 
@@ -312,7 +373,10 @@ Start with `node proxy/cli.mjs status` and `node proxy/cli.mjs logs`.
 | `400 Unknown model` | Use an id from `GET /v1/models` or add an alias under Models |
 | `404` from an app | The base URL format is wrong: Anthropic-style clients use the host only, OpenAI-style clients need `/v1` |
 | Certificate errors | Run `mkcert -install` on that machine; for Node apps set `NODE_EXTRA_CA_CERTS`; or use `http://<host>:4180` |
-| Replies longer than `max_tokens` | Expected: the CLI treats it as a hint. Use token limits |
+| `429 All … accounts tried are rate limited` | Every account the project may use is paused. Add an account, wait for the reset time shown, or allow more accounts for the project |
+| `503 The Claude account is signed out` | Run `node proxy/cli.mjs account login <name>` (or `claude login` for this computer's sign-in) |
+| Alerts not arriving | Use **Send test** under Alerts → Where alerts go. Failed sends are listed in Activity |
+| Requests show `127.0.0.1` through a tunnel | Set Settings → Network → "Behind a proxy or tunnel" |
 | Forgot the dashboard password | `node proxy/cli.mjs set-password '<new>'` |
 | Linux: `systemd user services are not available` | Run `node proxy/gateway.mjs` from your session startup, or use a process manager |
 | Windows: not running after login | Check Task Scheduler → `ClaudeGateway`, or run `bin\gateway.cmd start` |
@@ -320,8 +384,10 @@ Start with `node proxy/cli.mjs status` and `node proxy/cli.mjs logs`.
 ## Security notes
 
 - **Project keys** are random (`cgw_` plus 32 characters) and stored only as SHA-256 hashes. A key is shown once.
-- **Meridian is reachable only from this Mac**, and only with the internal key. Only `/v1/messages`, `/v1/chat/completions`, `/v1/models` and `/health` are forwarded.
-- **The dashboard** uses a password (scrypt) and an HttpOnly, SameSite=Strict session cookie. Changes need a custom header, as CSRF protection. Login attempts are rate-limited.
+- **Meridian is reachable only from this computer**, and only with the internal key. Only `/v1/messages`, `/v1/messages/count_tokens`, `/v1/chat/completions` and `/v1/models` reach it; `/health` and the dashboard are answered by the gateway.
+- **The dashboard** uses a password (scrypt) and an HttpOnly, SameSite=Strict session cookie (Secure over https). Changes need a custom header, as CSRF protection. Sign-in attempts are limited per address and overall, and failures are logged. Changing the password or "Sign out everywhere" ends every session. The page runs under a strict Content-Security-Policy with no inline scripts.
+- **Client addresses** come from the connection. Proxy headers are believed only when you choose a trusted proxy in Settings and the connection comes from this computer, so callers can't fake their address to get around blocking.
+- **Alert channel secrets** (webhook URL, Telegram token, SMTP password) are stored in `config.json` (mode 600) and never sent back to the browser.
 - **Prompts and replies are never stored.** Only metadata (tokens, timings, status, error text) is logged, and kept for `retentionDays`.
 - **CSV exports** escape formula-like cells.
 - **Network exposure:** the gateway listens on your network by default. Set `"host": "127.0.0.1"` in `config.json` if only this Mac should reach it. Don't expose it to the internet.
@@ -332,8 +398,10 @@ Start with `node proxy/cli.mjs status` and `node proxy/cli.mjs logs`.
 login service (launchd / systemd / Task Scheduler)
   └─ proxy/gateway.mjs   supervisor: restarts children, writes logs, one per folder (data/gateway.pid)
        ├─ Meridian         127.0.0.1:4101, the Claude backend (Agent SDK + Claude Code CLI)
-       └─ proxy/server.mjs 0.0.0.0:4100, keys, limits, usage log, dashboard
+       └─ proxy/server.mjs 0.0.0.0:4100, keys, limits, accounts, usage log, monitoring, alerts, dashboard
 ```
+
+The gateway's modules: `proxy.mjs` (checks, queue, account fallback, forwarding), `accounts.mjs` (account state and quota), `monitor.mjs` (one sample a minute and alert rules), `alerts.mjs` and `notify.mjs` with `smtp.mjs` (alerts and channels), `admin.mjs` (dashboard API), `public/` (the dashboard: `index.html`, `app.js`, `app.css`, no build step).
 
 - **`proxy/server.mjs`** and its modules make up the gateway, written in plain Node 22 with no npm dependencies.
   - Built-in `node:sqlite` stores projects and the request log.
@@ -347,6 +415,14 @@ login service (launchd / systemd / Task Scheduler)
   - It tells the gateway the backend's process id (for memory figures) and handles "Restart backend" from the dashboard over IPC.
 - **`proxy/cli.mjs`** installs and controls the login service on each OS.
 - **Why a user service:** the services run as you, not as a system service, because the Claude CLI's sign-in belongs to your user account. So they start when you log in. On Linux, lingering can keep them running while you're logged out.
+
+## Tests
+
+```bash
+npm test      # or: node --test test/*.test.mjs
+```
+
+The tests start the gateway against a fake backend in a temporary folder. They cover keys, limits, token counting for both API formats, CORS, address trust, body size, account fallback (rate limit, sign-out, errors at the start of a stream, per-project accounts), the queue timeout, disconnects, time zones and the SMTP client. They never touch your real data or accounts.
 
 ## Uninstall
 

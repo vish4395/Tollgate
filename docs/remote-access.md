@@ -79,7 +79,14 @@ To start it at boot:
 
 The service reads the same `config.yml`. On macOS and Linux, if it can't find the file, copy `config.yml` and the credentials file to `/etc/cloudflared/` and fix `credentials-file` in it.
 
-The gateway already reads the real visitor IP from Cloudflare's `cf-connecting-ip` header. So the request log shows your app server's IP, and blocking addresses that try bad keys keeps working.
+### 5. Tell the gateway about the tunnel
+
+In the dashboard, open **Settings → Network and time**:
+
+- **Behind a proxy or tunnel:** choose **Cloudflare tunnel**. The gateway then reads the caller's real address from Cloudflare's `cf-connecting-ip` header, so the request log shows your app server's address and blocking addresses that try bad keys keeps working. Without this, every caller shows as `127.0.0.1`.
+- **Public URL:** `https://claude.example.com`. Connection details and code snippets then show this address.
+
+Only choose a proxy when you really use one: the header is then believed for every connection from this computer.
 
 ---
 
@@ -96,6 +103,8 @@ The gateway already reads the real visitor IP from Cloudflare's `cf-connecting-i
 4. To start it at boot, add the tunnel to ngrok's config file and run `ngrok service install --config <path>`. See ngrok's "agent as a service" docs.
 
 The free plan has request and bandwidth limits, which are fine for testing and light use. ngrok publishes the dashboard too, so rely on the dashboard password, or use Option 1 if you want it private.
+
+Then in **Settings → Network and time**, set **Behind a proxy or tunnel** to **Other proxy or tunnel (X-Forwarded-For)** and **Public URL** to your ngrok address.
 
 ---
 
@@ -166,7 +175,9 @@ Set a generous timeout (60–120 s). Each request runs through the Claude CLI on
 - **Allowed models:** limit public keys to the models they need (for example `haiku`).
 - **Keep the dashboard private:** use the `path` rule in Option 1.
 - **Optional extra wall:** with Cloudflare, add a WAF rule that allows only your hosting server's IP for `claude.example.com`. Find that IP in the dashboard's request log after the first call.
-- **Watch the dashboard** for unknown IPs and 401 spikes. Repeated bad keys from one address get blocked automatically.
+- **Watch the dashboard** for unknown IPs and 401 spikes. Repeated bad keys from one address get blocked automatically, and a Security alert opens.
+- **Get told when it breaks:** set up an alert channel (Alerts → Where alerts go) so you hear when the backend is down or every account is rate limited. See [alerts.md](alerts.md).
+- **Several accounts:** with two or more Claude accounts, apps keep working when one hits its limit. See [accounts.md](accounts.md).
 
 ## Troubleshooting
 
@@ -176,4 +187,5 @@ Set a generous timeout (60–120 s). Each request runs through the Claude CLI on
 | `curl: Could not resolve host` | DNS route not created (`cloudflared tunnel route dns …`) or not propagated yet |
 | Timeouts from the app | PC asleep; app timeout too short; host blocks outgoing connections (ask the host, or test with `curl` over SSH) |
 | `401 authentication_error` | Wrong or rotated key; the header must be `x-api-key` or `Authorization: Bearer …` |
+| Every request shows `127.0.0.1` | Set Settings → Network → "Behind a proxy or tunnel" |
 | `429` | A project limit was reached, or too many bad keys came from that address (unblock it in the dashboard) |

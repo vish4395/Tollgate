@@ -2,6 +2,7 @@
 // restarts either if it stops, and writes their logs. This is what the login service starts.
 // Works the same on macOS, Linux and Windows.
 import { spawn } from "node:child_process";
+import { Writable } from "node:stream";
 import {
   createWriteStream,
   existsSync,
@@ -25,7 +26,7 @@ import {
   lockedPid,
 } from "./paths.mjs";
 
-for (const d of ["logs", "data"]) mkdirSync(join(ROOT, d), { recursive: true });
+for (const d of ["logs", "data", "data/meridian-config"]) mkdirSync(join(ROOT, d), { recursive: true });
 const WORK_DIR = join(homedir(), ".claude-gateway-work");
 mkdirSync(WORK_DIR, { recursive: true });
 
@@ -37,14 +38,33 @@ if (other && other !== process.pid) {
 }
 writeFileSync(LOCK_FILE, String(process.pid));
 
+/** A log file that rotates at 10 MB (keeping 3 old files), checked every 10 minutes while running. */
 function logFile(name) {
   const f = join(ROOT, "logs", `${name}.log`);
-  try {
-    if (statSync(f).size > 10 * 1024 * 1024) renameSync(f, f + ".1");
-  } catch {
-    /* no file yet */
-  }
-  return createWriteStream(f, { flags: "a" });
+  const rotate = () => {
+    try {
+      if (statSync(f).size <= 10 * 1024 * 1024) return false;
+      for (let i = 2; i >= 1; i--) if (existsSync(`${f}.${i}`)) renameSync(`${f}.${i}`, `${f}.${i + 1}`);
+      renameSync(f, `${f}.1`);
+      return true;
+    } catch {
+      return false; // no file yet
+    }
+  };
+  rotate();
+  let out = createWriteStream(f, { flags: "a" });
+  setInterval(() => {
+    if (rotate()) {
+      const old = out;
+      out = createWriteStream(f, { flags: "a" });
+      old.end();
+    }
+  }, 10 * 60_000).unref();
+  return new Writable({
+    write(chunk, _enc, cb) {
+      out.write(chunk, cb);
+    },
+  });
 }
 const sup = logFile("gateway");
 const note = (msg) => sup.write(`${new Date().toISOString()} ${msg}\n`);
@@ -61,6 +81,12 @@ if (!readText(keyFile))
   writeFileSync(keyFile, randomBytes(24).toString("hex"), { mode: 0o600 });
 
 function backendEnv() {
+  let settings = {};
+  try {
+    settings = JSON.parse(readFileSync(join(ROOT, "config.json"), "utf8"));
+  } catch {
+    /* first run: defaults */
+  }
   const env = {
     ...process.env,
     PATH: backendPath(),
@@ -68,7 +94,11 @@ function backendEnv() {
     MERIDIAN_PORT: "4101",
     MERIDIAN_API_KEY: readText(keyFile),
     MERIDIAN_PASSTHROUGH: "1",
-    MERIDIAN_MAX_CONCURRENT: "2",
+    MERIDIAN_MAX_CONCURRENT: String(settings.maxConcurrent ?? 2),
+    // Without this the backend ignores max_tokens; projects' "max output tokens" relies on it.
+    MERIDIAN_ENFORCE_MAX_TOKENS: settings.enforceMaxTokens === false ? "0" : "1",
+    // Extra accounts (profiles) live inside this folder, not in the user's home.
+    MERIDIAN_CONFIG_DIR: join(ROOT, "data", "meridian-config"),
     MERIDIAN_NO_UPDATE_CHECK: "1",
     // Outside any git repo, so the model never sees this folder's files or git status.
     MERIDIAN_WORKDIR: WORK_DIR,
@@ -121,6 +151,7 @@ function supervise(name, args, opts = {}) {
     child.on("exit", (code, signal) => {
       state.child = null;
       note(`${name} stopped (code ${code}, signal ${signal})`);
+      opts.onExit?.(code, signal);
       if (stopping) return;
       if (Date.now() - state.startedAt > 60_000) state.restarts = 0;
       const wait = Math.min(30_000, 1000 * 2 ** state.restarts++);
@@ -138,7 +169,12 @@ function supervise(name, args, opts = {}) {
       else start();
     },
     stop() {
-      state.child?.kill();
+      if (state.child) state.child.kill();
+      else state.exitWaiters?.forEach((fn) => fn());
+    },
+    onExit(fn) {
+      if (!state.child) return fn();
+      state.child.once("exit", fn);
     },
   };
 }
@@ -146,6 +182,9 @@ function supervise(name, args, opts = {}) {
 let proxyChild = null;
 const backend = supervise("meridian", [MERIDIAN_CLI], {
   env: backendEnv,
+  onExit: (code, signal) => {
+    if (!stopping && proxyChild?.connected) proxyChild.send({ type: "backend-exit", code, signal });
+  },
   onStart: (child) => {
     if (proxyChild?.connected) proxyChild.send({ type: "backend-pid", pid: child.pid });
   },
@@ -180,7 +219,13 @@ function shutdown() {
   } catch {
     /* already gone */
   }
-  setTimeout(() => process.exit(0), 1500).unref();
+  // The gateway finishes running requests first (up to 20 s).
+  setTimeout(() => process.exit(0), 22_000).unref();
+  let left = 2;
+  for (const c of [backend, server])
+    c.onExit(() => {
+      if (--left === 0) process.exit(0);
+    });
 }
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);

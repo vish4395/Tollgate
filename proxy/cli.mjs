@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Gateway command line for macOS, Linux and Windows.
 //   node proxy/cli.mjs install | uninstall | start | stop | restart | status | logs
-//   node proxy/cli.mjs login | add-project <name> | set-password <password> | run
+//   node proxy/cli.mjs account … | login | add-project <name> | set-password <password> | run
 import { spawn, spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -470,6 +470,57 @@ const commands = {
     say("Saved. Restarting so the backend uses its own sign-in…");
     await commands.restart();
   },
+  async account() {
+    const [sub, name, ...rest] = process.argv.slice(3);
+    const valid = (n) => /^[a-z0-9][a-z0-9_-]{0,39}$/i.test(n ?? "");
+    const meridian = (args, opts = {}) =>
+      sh(NODE, [MERIDIAN_CLI, "profile", ...args], {
+        stdio: "inherit",
+        ...opts,
+        env: {
+          ...process.env,
+          PATH: backendPath(),
+          MERIDIAN_CONFIG_DIR: join(ROOT, "data", "meridian-config"),
+          MERIDIAN_NO_UPDATE_CHECK: "1",
+          ...(readText(join(ROOT, ".internal-key")) ? { MERIDIAN_API_KEY: readText(join(ROOT, ".internal-key")) } : {}),
+        },
+      });
+    mkdirSync(join(ROOT, "data", "meridian-config"), { recursive: true });
+    if (sub === "list" || !sub) {
+      meridian(["list"]);
+      if (!sub) console.log("\nCommands: account add <name> [--token] | list | login <name> | rename <old> <new> | remove <name>");
+      return;
+    }
+    if (["add", "login", "remove"].includes(sub) && !valid(name)) fail(`Usage: node proxy/cli.mjs account ${sub} <name>  (letters, digits, - and _)`);
+    if (sub === "add") {
+      const listed = meridian(["list"], { stdio: "pipe" });
+      if (!/\S/.test(String(listed.stdout).replace(/Config:.*|Profiles are picked.*|No profiles.*/g, "")))
+        warn(
+          "This is the first named account. From now on the gateway uses only named accounts, not this computer's own sign-in.\n  To keep using your main account too, also add it: node proxy/cli.mjs account add main",
+        );
+      if (rest.includes("--token")) {
+        say("A browser opens: sign in with the account you're adding, then copy the token it prints (starts with sk-ant-oat).");
+        sh(which("claude") ?? "claude", ["setup-token"], { stdio: "inherit", shell: IS_WIN, env: { ...process.env, CLAUDE_CONFIG_DIR: join(ROOT, "data", "setup-token-home") } });
+        const token = (await askHidden("Paste the token (hidden), then Enter: ")).replace(/\s+/g, "");
+        if (!token.startsWith("sk-ant-")) fail("That does not look like a token. Nothing changed.");
+        const r = meridian(["add", name, "--oauth-token", token]);
+        if (r.status !== 0) fail("The backend could not add the account.");
+      } else {
+        say(`Adding account "${name}". A browser opens: sign in with the Claude account to add.`);
+        const r = meridian(["add", name, ...(rest.includes("--headless") ? ["--headless"] : [])]);
+        if (r.status !== 0) fail("The backend could not add the account.");
+      }
+      say(`Added. It shows on the dashboard's Accounts page within a minute.`);
+      return;
+    }
+    if (sub === "login") return void meridian(["login", name, ...rest]);
+    if (sub === "rename") {
+      if (!valid(name) || !valid(rest[0])) fail("Usage: node proxy/cli.mjs account rename <old> <new>");
+      return void meridian(["rename", name, rest[0]]);
+    }
+    if (sub === "remove") return void meridian(["remove", name]);
+    fail("Unknown account command. Use: add, list, login, rename, remove.");
+  },
   async "add-project"() {
     passToServer();
   },
@@ -516,7 +567,9 @@ if (!commands[cmd]) {
   install            install Meridian, register the login service and start
   uninstall          stop and remove the login service (data kept)
   start | stop | restart | status | logs
-  login              give the gateway its own Claude sign-in (claude setup-token)
+  account add <name> [--token]   add a Claude account (browser sign-in, or a setup token)
+  account list | login <name> | rename <old> <new> | remove <name>
+  login              give the gateway its own single Claude sign-in (claude setup-token)
   add-project <name> create a project key
   set-password <pw>  reset the dashboard password
   run                run in the foreground (no service)`);

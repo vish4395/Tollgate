@@ -1,0 +1,13 @@
+{
+  "name": "claude-cli-api-gateway",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Per-project API keys, account fallback, limits, monitoring and alerts in front of the Claude CLI.",
+  "license": "MIT",
+  "engines": { "node": ">=22.5" },
+  "scripts": {
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.mjs",
+    "start": "node proxy/cli.mjs start",
+    "status": "node proxy/cli.mjs status"
+  }
+}
